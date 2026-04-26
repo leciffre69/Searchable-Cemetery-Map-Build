@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="img/logo.png">
+<title>Admin — Plot Coordinate Mapper</title>
+<style>
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+
+body{
+  font-family:'Segoe UI',system-ui,sans-serif;
+  background:#0f1117;
+  color:#d4cfc8;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+}
+
+/* ── Top bar ── */
+#topbar{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:0 24px;
+  height:52px;
+  background:#161b22;
+  border-bottom:1px solid #30363d;
+  flex-shrink:0;
+  z-index:30;
+}
+#topbar .logo{
+  display:flex;align-items:center;gap:10px;
+  font-size:.95rem;font-weight:600;color:#e6dcc8;
+  letter-spacing:.03em;
+  text-decoration:none;
+}
+#topbar .logo img{
+  width:28px;height:28px;border-radius:50%;
+  object-fit:cover;border:1px solid #c8a84b55;
+}
+#topbar .badge{
+  background:#c8a84b22;
+  color:#c8a84b;
+  border:1px solid #c8a84b44;
+  border-radius:20px;
+  font-size:.68rem;
+  padding:2px 10px;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+#topbar .spacer{flex:1}
+#topbar a.back-link{
+  font-size:.78rem;color:#8b949e;text-decoration:none;
+  padding:5px 12px;border:1px solid #30363d;border-radius:6px;
+  transition:all .15s;
+}
+#topbar a.back-link:hover{color:#e6dcc8;border-color:#c8a84b55;background:#c8a84b11}
+
+/* ── Main layout ── */
+#workspace{
+  display:flex;
+  flex:1;
+  overflow:hidden;
+  min-height:0;
+}
+
+/* ── Map canvas ── */
+#map-area{
+  flex:1;
+  overflow:auto;
+  background:#0d1117;
+  position:relative;
+  cursor:crosshair;
+}
+#img-wrap{
+  position:relative;
+  display:inline-block;
+  margin:16px;
+}
+#img-wrap img{
+  display:block;
+  border:1px solid #30363d;
+  border-radius:4px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.6);
+}
+
+/* ── Plot dots ── */
+.dot{
+  position:absolute;
+  width:20px;height:20px;
+  border-radius:50%;
+  background:rgba(200,168,75,0.9);
+  border:2px solid #fff;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:6px;color:#1a1400;font-weight:700;
+  box-shadow:0 0 0 3px rgba(200,168,75,0.3);
+}
+.dot.new-dot{
+  background:rgba(80,200,120,0.9);
+  box-shadow:0 0 0 4px rgba(80,200,120,0.3);
+  animation:pop .25s ease-out;
+}
+@keyframes pop{
+  0%  {transform:translate(-50%,-50%) scale(0)}
+  70% {transform:translate(-50%,-50%) scale(1.3)}
+  100%{transform:translate(-50%,-50%) scale(1)}
+}
+
+/* ── Sidebar ── */
+#sidebar{
+  width:300px;
+  min-width:260px;
+  background:#161b22;
+  border-left:1px solid #30363d;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  flex-shrink:0;
+}
+
+/* Sidebar sections */
+.sb-section{
+  padding:16px;
+  border-bottom:1px solid #21262d;
+}
+.sb-section h3{
+  font-size:.7rem;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  color:#8b949e;
+  margin-bottom:12px;
+  font-weight:600;
+}
+
+/* Plot input */
+#plot-input-wrap{
+  display:flex;
+  gap:0;
+  margin-bottom:10px;
+}
+#plot-input{
+  flex:1;
+  padding:8px 12px;
+  background:#0d1117;
+  border:1px solid #30363d;
+  border-right:none;
+  border-radius:6px 0 0 6px;
+  color:#e6dcc8;
+  font-size:.9rem;
+  font-family:inherit;
+  outline:none;
+  transition:border-color .15s;
+}
+#plot-input:focus{border-color:#c8a84b}
+#plot-input::placeholder{color:#484f58}
+#plot-input-badge{
+  padding:8px 12px;
+  background:#c8a84b;
+  color:#1a1400;
+  border:1px solid #c8a84b;
+  border-radius:0 6px 6px 0;
+  font-size:.78rem;
+  font-weight:700;
+  white-space:nowrap;
+  display:flex;align-items:center;
+}
+
+/* Status + coords */
+#status{
+  font-size:.78rem;
+  min-height:20px;
+  padding:6px 10px;
+  border-radius:5px;
+  margin-bottom:6px;
+  background:#0d1117;
+  border:1px solid #21262d;
+  transition:all .2s;
+}
+#status.ok  {color:#3fb950;border-color:#238636}
+#status.warn{color:#d29922;border-color:#9e6a03}
+#status.idle{color:#8b949e;border-color:#21262d}
+#coord-display{
+  font-size:.72rem;color:#484f58;
+  font-variant-numeric:tabular-nums;
+  margin-bottom:2px;
+}
+
+/* Zoom row */
+#zoom-row{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:6px;
+  margin-bottom:0;
+}
+
+/* Buttons */
+.btn{
+  padding:7px 10px;
+  border:1px solid #30363d;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:.78rem;
+  font-family:inherit;
+  font-weight:500;
+  transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  white-space:nowrap;
+}
+.btn-ghost{background:transparent;color:#8b949e}
+.btn-ghost:hover{background:#21262d;color:#e6dcc8;border-color:#484f58}
+.btn-danger{background:#21262d;color:#f85149;border-color:#30363d}
+.btn-danger:hover{background:#3d1a1a;border-color:#f85149}
+.btn-primary{background:#c8a84b;color:#1a1400;border-color:#c8a84b;font-weight:700}
+.btn-primary:hover{background:#d4b85a;border-color:#d4b85a}
+.btn-secondary{background:#238636;color:#fff;border-color:#238636}
+.btn-secondary:hover{background:#2ea043;border-color:#2ea043}
+
+/* Action buttons grid */
+#action-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+}
+#btn-export{
+  grid-column:1/-1;
+}
+
+/* Progress bar */
+#progress-wrap{
+  margin-top:4px;
+}
+#progress-label{
+  display:flex;justify-content:space-between;
+  font-size:.72rem;color:#8b949e;margin-bottom:5px;
+}
+#progress-label strong{color:#c8a84b}
+#progress-bar-bg{
+  height:6px;background:#21262d;border-radius:3px;overflow:hidden;
+}
+#progress-bar{
+  height:100%;background:linear-gradient(90deg,#c8a84b,#e6c96a);
+  border-radius:3px;transition:width .3s ease;
+  width:0%;
+}
+
+/* Log */
+#log-wrap{
+  flex:1;overflow-y:auto;
+  padding:0;
+}
+#log-header{
+  padding:10px 16px 6px;
+  font-size:.68rem;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  color:#484f58;
+  border-bottom:1px solid #21262d;
+  position:sticky;top:0;
+  background:#161b22;
+  z-index:1;
+}
+#log{
+  padding:4px 0;
+}
+.log-entry{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:5px 16px;
+  font-size:.75rem;
+  border-bottom:1px solid #21262d11;
+  transition:background .1s;
+}
+.log-entry:hover{background:#21262d}
+.log-entry .log-num{
+  color:#c8a84b;
+  font-weight:700;
+  min-width:32px;
+  font-variant-numeric:tabular-nums;
+}
+.log-entry .log-coords{
+  color:#484f58;
+  font-variant-numeric:tabular-nums;
+  font-size:.7rem;
+  margin-left:auto;
+}
+
+/* JSON preview */
+#json-wrap{
+  padding:10px 16px;
+  border-top:1px solid #21262d;
+  flex-shrink:0;
+}
+#json-wrap label{
+  font-size:.68rem;text-transform:uppercase;
+  letter-spacing:.08em;color:#484f58;
+  display:block;margin-bottom:5px;
+}
+#json-out{
+  width:100%;height:64px;
+  background:#0d1117;
+  color:#3fb950;
+  border:1px solid #21262d;
+  border-radius:5px;
+  font-size:.65rem;
+  font-family:'Cascadia Code','Fira Code',monospace;
+  resize:none;
+  padding:6px 8px;
+  outline:none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#0d1117}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#484f58}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <a class="logo" href="/">
+    <img src="img/logo.png" alt="">
+    Llangynidr Graveyard
+  </a>
+  <span class="badge">Admin</span>
+  <div class="spacer"></div>
+  <a class="back-link" href="/">← Back to Map</a>
+</div>
+
+<!-- Workspace -->
+<div id="workspace">
+
+  <!-- Map canvas -->
+  <div id="map-area">
+    <div id="img-wrap">
+      <img id="sketch" src="sketch.png" alt="Graveyard sketch" draggable="false">
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+
+    <!-- Plot input -->
+    <div class="sb-section">
+      <h3>Place Plot</h3>
+      <div id="plot-input-wrap">
+        <input type="text" id="plot-input" placeholder="Plot number e.g. 1, 42, NK" autofocus>
+        <div id="plot-input-badge">NEXT</div>
+      </div>
+      <div id="status" class="idle">Ready — enter a plot number and click the image.</div>
+      <div id="coord-display">Cursor: —</div>
+    </div>
+
+    <!-- Zoom -->
+    <div class="sb-section">
+      <h3>View</h3>
+      <div id="zoom-row">
+        <button class="btn btn-ghost" onclick="zoom(1.25)">＋ In</button>
+        <button class="btn btn-ghost" onclick="zoom(0.8)">－ Out</button>
+        <button class="btn btn-ghost" onclick="zoom(1,true)">⊡ Fit</button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="sb-section">
+      <h3>Progress</h3>
+      <div id="progress-wrap">
+        <div id="progress-label">
+          <span>Mapped plots</span>
+          <strong><span id="count">0</span> / 373</strong>
+        </div>
+        <div id="progress-bar-bg">
+          <div id="progress-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="sb-section">
+      <h3>Actions</h3>
+      <div id="action-grid">
+        <button class="btn btn-ghost"      onclick="undoLast()">↩ Undo</button>
+        <button class="btn btn-danger"     onclick="clearAll()">🗑 Clear all</button>
+        <button class="btn btn-ghost"      onclick="loadExisting()">📂 Load JSON</button>
+        <button class="btn btn-secondary"  onclick="saveToServer()">💾 Save</button>
+        <button class="btn btn-primary"    id="btn-export" onclick="exportJSON()">⬇ Export plot_coords.json</button>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div id="log-wrap">
+      <div id="log-header">Activity log</div>
+      <div id="log"></div>
+    </div>
+
+    <!-- JSON preview -->
+    <div id="json-wrap">
+      <label>JSON preview</label>
+      <textarea id="json-out" readonly spellcheck="false"></textarea>
+    </div>
+
+  </div><!-- /sidebar -->
+</div><!-- /workspace -->
+
+<script>
+'use strict';
+
+let coords = {};
+let scale  = 1;
+const img  = document.getElementById('sketch');
+const wrap = document.getElementById('img-wrap');
+const TOTAL = 373;
+
+/* ── Fit on load ── */
+img.onload = () => { fitScale(); };
+if (img.complete && img.naturalWidth) fitScale();
+
+function fitScale() {
+  const panel = document.getElementById('map-area');
+  scale = Math.min(
+    (panel.clientWidth  - 32) / img.naturalWidth,
+    (panel.clientHeight - 32) / img.naturalHeight
+  ) * 0.97;
+  applyScale();
+}
+
+function zoom(factor, fit) {
+  if (fit) { fitScale(); return; }
+  scale = Math.min(Math.max(scale * factor, 0.15), 6);
+  applyScale();
+}
+
+function applyScale() {
+  img.style.width  = (img.naturalWidth  * scale) + 'px';
+  img.style.height = (img.naturalHeight * scale) + 'px';
+  for (const [pid, c] of Object.entries(coords)) {
+    const dot = document.getElementById('dot-' + pid);
+    if (dot) {
+      dot.style.left = (c.x * scale) + 'px';
+      dot.style.top  = (c.y * scale) + 'px';
+    }
+  }
+}
+
+/* ── Mouse tracking ── */
+img.addEventListener('mousemove', e => {
+  const r = img.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) / scale);
+  const y = Math.round((e.clientY - r.top)  / scale);
+  document.getElementById('coord-display').textContent = 'Cursor: x=' + x + '  y=' + y;
+});
+img.addEventListener('mouseleave', () => {
+  document.getElementById('coord-display').textContent = 'Cursor: —';
+});
+
+/* ── Click to place ── */
+img.addEventListener('click', e => {
+  const raw = document.getElementById('plot-input').value.trim();
+  const pid = raw.toUpperCase();
+  if (!pid) { setStatus('Enter a plot number first.', 'warn'); return; }
+
+  const r = img.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) / scale);
+  const y = Math.round((e.clientY - r.top)  / scale);
+
+  const old = document.getElementById('dot-' + pid);
+  if (old) old.remove();
+
+  coords[pid] = { x, y };
+
+  const dot = document.createElement('div');
+  dot.className = 'dot new-dot';
+  dot.id = 'dot-' + pid;
+  dot.style.left = (x * scale) + 'px';
+  dot.style.top  = (y * scale) + 'px';
+  dot.textContent = pid.length <= 3 ? pid : pid.slice(0, 3);
+  wrap.appendChild(dot);
+  setTimeout(() => dot.classList.remove('new-dot'), 300);
+
+  addLog(pid, x, y);
+  setStatus('Plot ' + pid + ' placed at (' + x + ', ' + y + ')', 'ok');
+  updateCount();
+  updateJSON();
+
+  // Auto-advance numeric plots
+  const n = parseInt(pid);
+  if (!isNaN(n)) document.getElementById('plot-input').value = String(n + 1);
+  document.getElementById('plot-input').select();
+});
+
+/* ── Status ── */
+function setStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = type || 'idle';
+}
+
+/* ── Log ── */
+function addLog(pid, x, y) {
+  const log = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = 'log-entry';
+  d.innerHTML =
+    '<span class="log-num">#' + pid + '</span>' +
+    '<span>placed</span>' +
+    '<span class="log-coords">x:' + x + ' y:' + y + '</span>';
+  log.prepend(d);
+}
+
+/* ── Count + progress ── */
+function updateCount() {
+  const n = Object.keys(coords).length;
+  document.getElementById('count').textContent = n;
+  document.getElementById('progress-bar').style.width = Math.min(n / TOTAL * 100, 100) + '%';
+}
+
+/* ── JSON preview ── */
+function updateJSON() {
+  document.getElementById('json-out').value = JSON.stringify(coords, null, 2);
+}
+
+/* ── Undo ── */
+function undoLast() {
+  const keys = Object.keys(coords);
+  if (!keys.length) return;
+  const last = keys[keys.length - 1];
+  const dot = document.getElementById('dot-' + last);
+  if (dot) dot.remove();
+  delete coords[last];
+  setStatus('Removed plot ' + last, 'warn');
+  updateCount(); updateJSON();
+}
+
+/* ── Clear ── */
+function clearAll() {
+  if (!confirm('Clear all placed coordinates?')) return;
+  document.querySelectorAll('.dot').forEach(d => d.remove());
+  coords = {};
+  document.getElementById('log').innerHTML = '';
+  updateCount(); updateJSON();
+  setStatus('All coordinates cleared.', 'warn');
+}
+
+/* ── Export ── */
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(coords, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'plot_coords.json';
+  a.click();
+  setStatus('Exported plot_coords.json', 'ok');
+}
+
+/* ── Save to server (PUT) ── */
+function saveToServer() {
+  fetch('plot_coords.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(coords, null, 2)
+  })
+  .then(r => {
+    if (r.ok) setStatus('Saved to server.', 'ok');
+    else throw new Error('Server returned ' + r.status);
+  })
+  .catch(() => {
+    // Simple HTTP server doesn't support PUT — fall back to export
+    setStatus('Server save not supported — use Export instead.', 'warn');
+  });
+}
+
+/* ── Load existing ── */
+function loadExisting() {
+  fetch('plot_coords.json')
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(data => {
+      coords = {};
+      document.querySelectorAll('.dot').forEach(d => d.remove());
+      document.getElementById('log').innerHTML = '';
+
+      for (const [pid, v] of Object.entries(data)) {
+        const x = v.x !== undefined ? v.x : v.cx;
+        const y = v.y !== undefined ? v.y : v.cy;
+        if (x === undefined || y === undefined) continue;
+        coords[pid] = { x, y };
+
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        dot.id = 'dot-' + pid;
+        dot.style.left = (x * scale) + 'px';
+        dot.style.top  = (y * scale) + 'px';
+        dot.textContent = pid.length <= 3 ? pid : pid.slice(0, 3);
+        wrap.appendChild(dot);
+      }
+      updateCount(); updateJSON();
+      setStatus('Loaded ' + Object.keys(coords).length + ' coordinates.', 'ok');
+    })
+    .catch(() => setStatus('No plot_coords.json found.', 'warn'));
+}
+
+/* ── Boot ── */
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(loadExisting, 200);
+});
+
+/* ── Keyboard: Enter → focus input ── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement.id !== 'plot-input') {
+    document.getElementById('plot-input').focus();
+  }
+  if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {  // Ctrl+Z = undo
+    e.preventDefault();
+    undoLast();
+  }
+});
+</script>
+</body>
+</html>
